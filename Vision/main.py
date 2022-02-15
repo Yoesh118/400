@@ -5,11 +5,20 @@ import numpy as np
 import skimage.draw
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
+from tensorflow.python.client import device_lib
 import warnings
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=Warning)
+
+import tensorflow as tf
+
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/usr/local/cuda"
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] ='true'
 
 # Path to trained weights file
 WEIGHTS_PATH = "weights.h5"
@@ -28,13 +37,15 @@ class CustomConfig(Config):
     # Give the configuration a recognizable name
     NAME = "object"
 
+    GPU_COUNT = 1
+
     IMAGES_PER_GPU = 1
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 38
 
     # Number of training steps per epoch
-    STEPS_PER_EPOCH = 100
+    STEPS_PER_EPOCH = 50
 
     # Skip detections with < 90% confidence
     DETECTION_MIN_CONFIDENCE = 0.9
@@ -76,7 +87,7 @@ class CustomDataset(utils.Dataset):
         #   'size': 100202
         # }
         # We mostly care about the x and y coordinates of each region
-        annotations = json.load(open("number_plates.json"))
+        annotations = json.load(open("PLATES_RECENT_json.json"))
         # print(annotations1)
         annotations = list(annotations.values())  # don't need the dict keys
 
@@ -85,9 +96,11 @@ class CustomDataset(utils.Dataset):
         annotations = [a for a in annotations if a['regions']]
 
         # Add images
+        labels = []
+        pid = []
         for a in annotations:
             print(a, '\n\n', a.keys(), '\n\n')
-            # Get the x, y coordinaets of points of the polygons that make up
+            # Get the x, y coordinates of points of the polygons that make up
             # the outline of each object instance. There are stores in the
             # shape_attributes (see json format above
             polygons = [r['shape_attributes'] for r in a['regions']]
@@ -101,23 +114,22 @@ class CustomDataset(utils.Dataset):
                     print(9 / 0)
             objects = [s['region_attributes']['CHARACTER'] for s in a['regions']]
             print("objects:", objects)
+            labels.extend(objects)
             name_dict = {CHARACTERS[index - 1]: index for index in range(1, len(CHARACTERS) + 1)}
             pattern_ids = [name_dict[a] for a in objects]
 
             print("numids", pattern_ids)
             image_path = os.path.join(dataset_dir, a['filename'])
             image = skimage.io.imread(image_path)
-            print(image)
             height, width = image.shape[:2]
             print('IMAGE DIMENSIONS ', width, height)
-
             self.add_image(
                 "object",  ## for a single class just add the name here
                 image_id=a['filename'],  # use file name as a unique image id
                 path=image_path,
                 width=width, height=height,
                 polygons=polygons,
-                pattern_ids=pattern_ids)
+                pattern_ids=np.array(pattern_ids, dtype=np.int32))
 
     def load_mask(self, image_id):
         """Generate instance masks for an image.
@@ -178,10 +190,10 @@ def train(model):
     # COCO trained weights, we don't need to train too long. Also,
     # no need to train all layers, just the heads should do it.
     print("Training network heads")
-    model.train(dataset_train, dataset_val,
-                learning_rate=config.LEARNING_RATE,
-                epochs=10,
-                layers='heads')
+
+    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=10, layers='heads')
+
+
 
 
 def color_splash(image, mask):
@@ -258,6 +270,7 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
 ############################################################
 #  Training
 ############################################################
+import tensorflow as tf
 
 if __name__ == '__main__':
     # Configurations
@@ -267,9 +280,8 @@ if __name__ == '__main__':
     # Create model
     model = modellib.MaskRCNN(mode="training", config=config, model_dir='./logs')
     weights_path = WEIGHTS_PATH
-
     # Load weights
     print("Loading weights ", weights_path)
-    model.load_weights(weights_path, by_name=True,
-                       exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
-    train(model)
+    with tf.device('/device:XLA_GPU:0'):       
+        model.load_weights(weights_path, by_name=True, exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
+        train(model)
