@@ -25,7 +25,7 @@ ROOT_DIR = os.path.abspath("../")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
-import utils
+from mrcnn import utils
 
 
 ############################################################
@@ -139,7 +139,12 @@ def display_instances(image, boxes, masks, class_ids, class_names,
         if not captions:
             class_id = class_ids[i]
             score = scores[i] if scores is not None else None
-            label = class_names[class_id]
+            if class_id  == 10:
+                label = "0"
+            elif class_id ==11:
+                label = "PLATE"
+            else:
+                label = class_names[class_id-1]
             caption = "{} {:.3f}".format(label, score) if score else label
         else:
             caption = captions[i]

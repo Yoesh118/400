@@ -317,3 +317,5 @@ if __name__ == '__main__':
         model.load_weights(weights_path, by_name=True,
                            exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
         train(model)
+
+
