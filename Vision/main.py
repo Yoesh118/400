@@ -8,20 +8,20 @@ from mrcnn import model as modellib, utils
 from tensorflow.python.client import device_lib
 import warnings
 
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-warnings.filterwarnings('ignore', category=FutureWarning)
-warnings.filterwarnings('ignore', category=Warning)
-
 import tensorflow as tf
 
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/usr/local/cuda"
 
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=Warning)
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] ='true'
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 # Path to trained weights file
-WEIGHTS_PATH = "weights.h5"
+WEIGHTS_PATH = "mask_rcnn_object_0049.h5"
 
 # Directory to save logs and model checkpoints, if not provided through the command line argument --logs
 DEFAULT_LOGS_DIR = "logs"
@@ -42,10 +42,10 @@ class CustomConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 38
+    NUM_CLASSES = 1 + 37
 
     # Number of training steps per epoch
-    STEPS_PER_EPOCH = 50
+    STEPS_PER_EPOCH = 100
 
     # Skip detections with < 90% confidence
     DETECTION_MIN_CONFIDENCE = 0.9
@@ -63,10 +63,43 @@ class CustomDataset(utils.Dataset):
             "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X",
             "Y", "Z"
         ]
-
-        # Add classes. We have only one class to add.
-        for char in range(1, len(CHARACTERS) + 1):
-            self.add_class("object", char, CHARACTERS[char - 1])
+        self.add_class("object", 1, "1")
+        self.add_class("object", 2, "2")
+        self.add_class("object", 3, "3")
+        self.add_class("object", 4, "4")
+        self.add_class("object", 5, "5")
+        self.add_class("object", 6, "6")
+        self.add_class("object", 7, "7")
+        self.add_class("object", 8, "8")
+        self.add_class("object", 9, "9")
+        self.add_class("object", 10, "0")
+        self.add_class("object", 11, "11")
+        self.add_class("object", 12, "A")
+        self.add_class("object", 13, "B")
+        self.add_class("object", 14, "C")
+        self.add_class("object", 15, "D")
+        self.add_class("object", 16, "E")
+        self.add_class("object", 17, "F")
+        self.add_class("object", 18, "G")
+        self.add_class("object", 19, "H")
+        self.add_class("object", 20, "I")
+        self.add_class("object", 21, "J")
+        self.add_class("object", 22, "K")
+        self.add_class("object", 23, "L")
+        self.add_class("object", 24, "M")
+        self.add_class("object", 25, "N")
+        self.add_class("object", 26, "O")
+        self.add_class("object", 27, "P")
+        self.add_class("object", 28, "Q")
+        self.add_class("object", 29, "R")
+        self.add_class("object", 30, "S")
+        self.add_class("object", 31, "T")
+        self.add_class("object", 32, "U")
+        self.add_class("object", 33, "V")
+        self.add_class("object", 34, "W")
+        self.add_class("object", 35, "X")
+        self.add_class("object", 36, "Y")
+        self.add_class("object", 37, "Z")
 
         # Train or validation dataset?
         assert subset in ["train", "val"]
@@ -87,7 +120,7 @@ class CustomDataset(utils.Dataset):
         #   'size': 100202
         # }
         # We mostly care about the x and y coordinates of each region
-        annotations = json.load(open("PLATES_RECENT_json.json"))
+        annotations = json.load(open("annotattion.json"))
         # print(annotations1)
         annotations = list(annotations.values())  # don't need the dict keys
 
@@ -104,25 +137,25 @@ class CustomDataset(utils.Dataset):
             # the outline of each object instance. There are stores in the
             # shape_attributes (see json format above
             polygons = [r['shape_attributes'] for r in a['regions']]
-            print(polygons)
+            # print(polygons)
             objects = []
             for s in a['regions']:
                 try:
                     objects.append(s['region_attributes']['CHARACTER'])
                 except KeyError:
-                    print('=====>', s, )
+                    # print('=====>', s, )
                     print(9 / 0)
             objects = [s['region_attributes']['CHARACTER'] for s in a['regions']]
-            print("objects:", objects)
+            # print("objects:", objects)
             labels.extend(objects)
             name_dict = {CHARACTERS[index - 1]: index for index in range(1, len(CHARACTERS) + 1)}
             pattern_ids = [name_dict[a] for a in objects]
 
-            print("numids", pattern_ids)
+            # print("numids", pattern_ids)
             image_path = os.path.join(dataset_dir, a['filename'])
             image = skimage.io.imread(image_path)
             height, width = image.shape[:2]
-            print('IMAGE DIMENSIONS ', width, height)
+            # print('IMAGE DIMENSIONS ', width, height)
             self.add_image(
                 "object",  ## for a single class just add the name here
                 image_id=a['filename'],  # use file name as a unique image id
@@ -191,9 +224,7 @@ def train(model):
     # no need to train all layers, just the heads should do it.
     print("Training network heads")
 
-    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=10, layers='heads')
-
-
+    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=50, layers='heads')
 
 
 def color_splash(image, mask):
@@ -282,6 +313,7 @@ if __name__ == '__main__':
     weights_path = WEIGHTS_PATH
     # Load weights
     print("Loading weights ", weights_path)
-    with tf.device('/device:XLA_GPU:0'):       
-        model.load_weights(weights_path, by_name=True, exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
+    with tf.device('/device:XLA_GPU:0'):
+        model.load_weights(weights_path, by_name=True,
+                           exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"])
         train(model)
